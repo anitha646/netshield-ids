@@ -1,0 +1,35 @@
+{
+  "best_model": "xgboost",
+  "accuracy": 0.9354285714285714,
+  "features": [
+    "duration",
+    "src_bytes",
+    "dst_bytes",
+    "land",
+    "wrong_fragment",
+    "urgent",
+    "hot",
+    "num_failed_logins",
+    "logged_in",
+    "count",
+    "srv_count",
+    "serror_rate",
+    "same_srv_rate",
+    "dst_host_count",
+    "dst_host_srv_count",
+    "protocol_type",
+    "service",
+    "flag"
+  ],
+  "label_map": {
+    "NORMAL": 0,
+    "DoS": 1,
+    "Probe": 2,
+    "R2L": 3,
+    "U2R": 4
+  },
+  "results": {
+    "random_forest": 0.9297142857142857,
+    "xgboost": 0.9354285714285714
+  }
+}

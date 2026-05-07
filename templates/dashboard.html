@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IDS — Network Intrusion Detection System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0: #0a0c0f;
+  --bg1: #0f1318;
+  --bg2: #141920;
+  --bg3: #1c2430;
+  --border: #1e2d3d;
+  --border2: #243447;
+  --text0: #e8eef4;
+  --text1: #8fa3b4;
+  --text2: #4d6278;
+  --accent: #00d4ff;
+  --accent2: #0099cc;
+  --normal: #22c55e;
+  --dos: #ef4444;
+  --probe: #f59e0b;
+  --r2l: #f97316;
+  --u2r: #dc2626;
+  --grid: rgba(0,212,255,0.03);
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg0);
+  color: var(--text0);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scan line animation */
+body::after {
+  content: '';
+  position: fixed;
+  top: -100%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.15), transparent);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes scanline { to { top: 200%; } }
+
+/* ── Layout ── */
+#app { position: relative; z-index: 2; display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+  flex-shrink: 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-icon::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(0,212,255,0.4);
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+@keyframes pulse-border { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.logo-icon svg { width: 18px; height: 18px; }
+
+.logo-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text0);
+}
+
+.logo-sub {
+  font-size: 10px;
+  color: var(--text2);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.header-right { display: flex; align-items: center; gap: 20px; }
+
+.status-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text1);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--normal);
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+.dot.alert { background: var(--dos); }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.clock {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+/* ── Main grid ── */
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr 300px;
+  grid-template-rows: 120px 1fr 200px;
+  gap: 1px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.panel {
+  background: var(--bg1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--bg2);
+}
+
+.panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+
+.panel-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--border2);
+  color: var(--text1);
+  letter-spacing: 0.05em;
+}
+
+/* ── Stat cards row ── */
+.stats-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1px;
+  background: var(--border);
+}
+
+.stat-card {
+  background: var(--bg1);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  transition: background 0.2s;
+}
+
+.stat-card:hover { background: var(--bg2); }
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+}
+
+.stat-card.total::before { background: var(--accent); }
+.stat-card.normal::before { background: var(--normal); }
+.stat-card.dos::before { background: var(--dos); }
+.stat-card.probe::before { background: var(--probe); }
+.stat-card.r2l::before { background: var(--r2l); }
+.stat-card.u2r::before { background: var(--u2r); }
+
+.stat-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.3s;
+}
+
+.stat-card.total .stat-value { color: var(--accent); }
+.stat-card.normal .stat-value { color: var(--normal); }
+.stat-card.dos .stat-value { color: var(--dos); }
+.stat-card.probe .stat-value { color: var(--probe); }
+.stat-card.r2l .stat-value { color: var(--r2l); }
+.stat-card.u2r .stat-value { color: var(--u2r); }
+
+.stat-sub { font-size: 9px; color: var(--text2); }
+
+/* ── Left panel: attack distribution ── */
+.dist-panel { grid-column: 1; grid-row: 2; }
+
+.dist-bars { padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+
+.dist-item { display: flex; flex-direction: column; gap: 4px; }
+.dist-label { display: flex; justify-content: space-between; font-size: 10px; }
+.dist-name { color: var(--text1); }
+.dist-pct { color: var(--text2); }
+.dist-track { height: 3px; background: var(--bg3); position: relative; overflow: hidden; }
+.dist-fill { height: 100%; transition: width 0.5s ease; }
+
+/* ── Center: live flow table ── */
+.flow-panel { grid-column: 2; grid-row: 2; }
+
+.flow-table-wrap { flex: 1; overflow-y: auto; }
+
+.flow-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.flow-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg2);
+}
+
+.flow-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text2);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.flow-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(30,45,61,0.4);
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text1);
+  transition: background 0.15s;
+}
+
+.flow-table tr:hover td { background: var(--bg2); }
+
+.flow-table tr.new-row td {
+  animation: row-flash 0.6s ease-out;
+}
+
+@keyframes row-flash {
+  from { background: rgba(0,212,255,0.08); }
+  to   { background: transparent; }
+}
+
+.flow-table tr.attack-row td { background: rgba(239,68,68,0.04); }
+.flow-table tr.attack-row:hover td { background: rgba(239,68,68,0.08); }
+
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge-NORMAL  { color: var(--normal); border: 1px solid rgba(34,197,94,0.3); }
+.badge-DoS     { color: var(--dos);    border: 1px solid rgba(239,68,68,0.4); background: rgba(239,68,68,0.06); }
+.badge-Probe   { color: var(--probe);  border: 1px solid rgba(245,158,11,0.3); }
+.badge-R2L     { color: var(--r2l);    border: 1px solid rgba(249,115,22,0.35); }
+.badge-U2R     { color: var(--u2r);    border: 1px solid rgba(220,38,38,0.4); background: rgba(220,38,38,0.06); }
+
+.conf-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.conf-track {
+  width: 40px;
+  height: 2px;
+  background: var(--bg3);
+  flex-shrink: 0;
+}
+
+.conf-fill { height: 100%; }
+
+/* ── Right panel: alerts ── */
+.alert-panel { grid-column: 3; grid-row: 2; }
+
+.alert-list { flex: 1; overflow-y: auto; }
+
+.alert-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(30,45,61,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  animation: alert-in 0.3s ease-out;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.alert-item:hover { background: var(--bg2); }
+
+@keyframes alert-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.alert-top { display: flex; align-items: center; justify-content: space-between; }
+.alert-label { font-size: 10px; font-weight: 600; }
+.alert-time { font-size: 9px; color: var(--text2); }
+.alert-ip { font-size: 10px; color: var(--text1); }
+.alert-detail { font-size: 9px; color: var(--text2); }
+
+/* ── Bottom: mini chart ── */
+.chart-panel {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  gap: 1px;
+}
+
+.timeline-panel { flex: 1; }
+.donut-panel { width: 260px; flex-shrink: 0; }
+
+canvas { display: block; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--border2); }
+
+/* ── Model info bar ── */
+.model-bar {
+  padding: 4px 24px;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  font-size: 10px;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+
+.model-bar span { display: flex; align-items: center; gap: 5px; }
+.model-bar .val { color: var(--accent); font-weight: 500; }
+
+/* ── Severity indicator ── */
+.sev-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.severity-none     .sev-dot { background: var(--normal); }
+.severity-medium   .sev-dot { background: var(--probe); }
+.severity-high     .sev-dot { background: var(--r2l); }
+.severity-critical .sev-dot { background: var(--dos); box-shadow: 0 0 4px var(--dos); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="logo-title">NetShield IDS</div>
+        <div class="logo-sub">Network Intrusion Detection System</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-dot">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-text">MONITORING</span>
+      </div>
+      <div class="clock" id="clock">00:00:00</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Stats row -->
+    <div class="stats-row">
+      <div class="stat-card total">
+        <div class="stat-label">Total Flows</div>
+        <div class="stat-value" id="stat-total">0</div>
+        <div class="stat-sub">analyzed</div>
+      </div>
+      <div class="stat-card normal">
+        <div class="stat-label">Normal</div>
+        <div class="stat-value" id="stat-normal">0</div>
+        <div class="stat-sub" id="stat-normal-pct">0%</div>
+      </div>
+      <div class="stat-card dos">
+        <div class="stat-label">DoS</div>
+        <div class="stat-value" id="stat-dos">0</div>
+        <div class="stat-sub">denial of service</div>
+      </div>
+      <div class="stat-card probe">
+        <div class="stat-label">Probe</div>
+        <div class="stat-value" id="stat-probe">0</div>
+        <div class="stat-sub">reconnaissance</div>
+      </div>
+      <div class="stat-card r2l">
+        <div class="stat-label">R2L</div>
+        <div class="stat-value" id="stat-r2l">0</div>
+        <div class="stat-sub">remote to local</div>
+      </div>
+      <div class="stat-card u2r">
+        <div class="stat-label">U2R</div>
+        <div class="stat-value" id="stat-u2r">0</div>
+        <div class="stat-sub">privilege escalation</div>
+      </div>
+    </div>
+
+    <!-- Left: distribution -->
+    <div class="panel dist-panel">
+      <div class="panel-header">
+        <span class="panel-title">Attack Distribution</span>
+        <span class="panel-badge" id="attack-rate">0% threat</span>
+      </div>
+      <div class="dist-bars" id="dist-bars">
+        <div class="dist-item" id="dist-NORMAL">
+          <div class="dist-label"><span class="dist-name">NORMAL</span><span class="dist-pct" id="dpct-NORMAL">0%</span></div>
+          <div class="dist-track"><div class="dist-fill" id="dbar-NORMAL" style="width:0%;background:var(--normal)"></div></div>
+        </div>
+        <div class="dist-item" id="dist-DoS">
+          <div class="dist-label"><span class="dist-name">DoS</span><span class="dist-pct" id="dpct-DoS">0%</span></div>
+          <div class="dist-track"><div class="dist-fill" id="dbar-DoS" style="width:0%;background:var(--dos)"></div></div>
+        </div>
+        <div class="dist-item" id="dist-Probe">
+          <div class="dist-label"><span class="dist-name">Probe</span><span class="dist-pct" id="dpct-Probe">0%</span></div>
+          <div class="dist-track"><div class="dist-fill" id="dbar-Probe" style="width:0%;background:var(--probe)"></div></div>
+        </div>
+        <div class="dist-item" id="dist-R2L">
+          <div class="dist-label"><span class="dist-name">R2L</span><span class="dist-pct" id="dpct-R2L">0%</span></div>
+          <div class="dist-track"><div class="dist-fill" id="dbar-R2L" style="width:0%;background:var(--r2l)"></div></div>
+        </div>
+        <div class="dist-item" id="dist-U2R">
+          <div class="dist-label"><span class="dist-name">U2R</span><span class="dist-pct" id="dpct-U2R">0%</span></div>
+          <div class="dist-track"><div class="dist-fill" id="dbar-U2R" style="width:0%;background:var(--u2r)"></div></div>
+        </div>
+      </div>
+
+      <!-- Mini model info -->
+      <div style="padding:10px 14px;border-top:1px solid var(--border);margin-top:auto;flex-shrink:0">
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text2);margin-bottom:6px">Model Info</div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--text1)">
+          <div style="display:flex;justify-content:space-between"><span>Algorithm</span><span id="model-name" style="color:var(--accent)">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Accuracy</span><span id="model-acc" style="color:var(--normal)">—</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Features</span><span id="model-feats" style="color:var(--text1)">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: flow table -->
+    <div class="panel flow-panel">
+      <div class="panel-header">
+        <span class="panel-title">Live Network Flows</span>
+        <span class="panel-badge" id="flow-count">0 flows</span>
+      </div>
+      <div class="flow-table-wrap">
+        <table class="flow-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Src IP</th>
+              <th>Dst IP</th>
+              <th>Proto</th>
+              <th>Service</th>
+              <th>Bytes↑</th>
+              <th>Bytes↓</th>
+              <th>Err Rate</th>
+              <th>Classification</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="flow-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right: alerts -->
+    <div class="panel alert-panel">
+      <div class="panel-header">
+        <span class="panel-title">Alert Log</span>
+        <span class="panel-badge" id="alert-count">0 alerts</span>
+      </div>
+      <div class="alert-list" id="alert-list"></div>
+    </div>
+
+    <!-- Bottom: timeline chart -->
+    <div class="panel chart-panel">
+      <div class="panel timeline-panel" style="display:flex;flex-direction:column;">
+        <div class="panel-header">
+          <span class="panel-title">Flow Timeline (last 60s)</span>
+        </div>
+        <div style="flex:1;padding:8px;position:relative">
+          <canvas id="timeline-chart"></canvas>
+        </div>
+      </div>
+      <div class="panel donut-panel" style="background:var(--bg1);display:flex;flex-direction:column;">
+        <div class="panel-header">
+          <span class="panel-title">Attack Breakdown</span>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px">
+          <canvas id="donut-chart" width="180" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <div class="model-bar">
+    <span>ML Model: <span class="val" id="footer-model">—</span></span>
+    <span>Dataset: <span class="val">NSL-KDD / Synthetic</span></span>
+    <span>Features: <span class="val" id="footer-feats">—</span></span>
+    <span>Attack Rate: <span class="val" id="footer-rate">0%</span></span>
+    <span style="margin-left:auto;color:var(--text2)">NetShield IDS v1.0 · Adithiya</span>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── Clock ──────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  $('clock').textContent = new Date().toLocaleTimeString('en-GB');
+}, 1000);
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let totalFlows = 0, alertCount = 0;
+const counts = {NORMAL:0, DoS:0, Probe:0, R2L:0, U2R:0};
+const timelineData = []; // {t, normal, attack}
+const MAX_ROWS = 80;
+let lastMinute = Math.floor(Date.now()/1000);
+
+// ── Timeline canvas ────────────────────────────────────────────────────────────
+const tlCanvas = $('timeline-chart');
+const tlCtx = tlCanvas.getContext('2d');
+const TIMELINE_SLOTS = 60;
+const tl = new Array(TIMELINE_SLOTS).fill(null).map(()=>({n:0,a:0}));
+let tlIdx = 0, tlTimer = 0;
+
+function resizeTimeline() {
+  const wrap = tlCanvas.parentElement;
+  tlCanvas.width = wrap.clientWidth - 16;
+  tlCanvas.height = wrap.clientHeight - 16;
+  drawTimeline();
+}
+
+function drawTimeline() {
+  const W = tlCanvas.width, H = tlCanvas.height;
+  if (W <= 0 || H <= 0) return;
+  tlCtx.clearRect(0,0,W,H);
+
+  const maxVal = Math.max(1, ...tl.map(b=>b.n+b.a));
+  const bw = W / TIMELINE_SLOTS;
+
+  // Grid lines
+  tlCtx.strokeStyle = 'rgba(30,45,61,0.8)';
+  tlCtx.lineWidth = 0.5;
+  for (let i=0; i<=4; i++) {
+    const y = H - (i/4)*H;
+    tlCtx.beginPath(); tlCtx.moveTo(0,y); tlCtx.lineTo(W,y); tlCtx.stroke();
+  }
+
+  for (let i=0; i<TIMELINE_SLOTS; i++) {
+    const slot = tl[i];
+    const x = i * bw;
+    const total = slot.n + slot.a;
+    if (total === 0) continue;
+    const totalH = (total/maxVal) * (H-4);
+    const normalH = (slot.n/maxVal) * (H-4);
+
+    // attack portion
+    if (slot.a > 0) {
+      tlCtx.fillStyle = 'rgba(239,68,68,0.7)';
+      tlCtx.fillRect(x+1, H-totalH, bw-2, totalH-normalH);
+    }
+    // normal portion
+    tlCtx.fillStyle = 'rgba(34,197,94,0.55)';
+    tlCtx.fillRect(x+1, H-normalH, bw-2, normalH);
+  }
+}
+
+setInterval(() => {
+  tlIdx = (tlIdx+1) % TIMELINE_SLOTS;
+  tl[tlIdx] = {n:0,a:0};
+  drawTimeline();
+}, 1000);
+
+window.addEventListener('resize', resizeTimeline);
+setTimeout(resizeTimeline, 100);
+
+// ── Donut chart ────────────────────────────────────────────────────────────────
+const dnCanvas = $('donut-chart');
+const dnCtx = dnCanvas.getContext('2d');
+
+const ATTACK_COLORS = {
+  NORMAL:'#22c55e', DoS:'#ef4444', Probe:'#f59e0b', R2L:'#f97316', U2R:'#dc2626'
+};
+
+function drawDonut() {
+  const W = dnCanvas.width, H = dnCanvas.height;
+  const cx = W/2, cy = H/2, r = Math.min(W,H)*0.38, ri = r*0.55;
+  dnCtx.clearRect(0,0,W,H);
+
+  const total = Object.values(counts).reduce((a,b)=>a+b,0);
+  if (total === 0) return;
+
+  let startAngle = -Math.PI/2;
+  Object.entries(counts).forEach(([lbl,val]) => {
+    if (val === 0) return;
+    const slice = (val/total) * Math.PI*2;
+    dnCtx.beginPath();
+    dnCtx.arc(cx,cy,r,startAngle,startAngle+slice);
+    dnCtx.arc(cx,cy,ri,startAngle+slice,startAngle,true);
+    dnCtx.closePath();
+    dnCtx.fillStyle = ATTACK_COLORS[lbl];
+    dnCtx.globalAlpha = 0.85;
+    dnCtx.fill();
+    startAngle += slice;
+  });
+
+  // Center text
+  dnCtx.globalAlpha = 1;
+  dnCtx.fillStyle = '#8fa3b4';
+  dnCtx.font = '500 10px JetBrains Mono,monospace';
+  dnCtx.textAlign = 'center';
+  dnCtx.fillText('flows', cx, cy+4);
+  dnCtx.fillStyle = '#00d4ff';
+  dnCtx.font = '600 14px Syne,sans-serif';
+  dnCtx.fillText(total.toLocaleString(), cx, cy-8);
+}
+
+// ── Update UI ──────────────────────────────────────────────────────────────────
+function updateStats() {
+  const total = Object.values(counts).reduce((a,b)=>a+b,0);
+  $('stat-total').textContent = total.toLocaleString();
+  $('stat-normal').textContent = counts.NORMAL.toLocaleString();
+  $('stat-dos').textContent = counts.DoS.toLocaleString();
+  $('stat-probe').textContent = counts.Probe.toLocaleString();
+  $('stat-r2l').textContent = counts.R2L.toLocaleString();
+  $('stat-u2r').textContent = counts.U2R.toLocaleString();
+
+  const normalPct = total ? Math.round(counts.NORMAL/total*100) : 0;
+  $('stat-normal-pct').textContent = normalPct + '% of traffic';
+
+  const attackPct = total ? Math.round((total-counts.NORMAL)/total*100) : 0;
+  $('attack-rate').textContent = attackPct + '% threat';
+  $('footer-rate').textContent = attackPct + '%';
+
+  Object.keys(counts).forEach(lbl => {
+    const pct = total ? Math.round(counts[lbl]/total*100) : 0;
+    const bar = $('dbar-'+lbl), pctEl = $('dpct-'+lbl);
+    if (bar) bar.style.width = pct+'%';
+    if (pctEl) pctEl.textContent = pct+'%';
+  });
+
+  drawDonut();
+}
+
+function addFlowRow(ev) {
+  const tbody = $('flow-tbody');
+  const isAttack = ev.label !== 'NORMAL';
+  const conf = Math.round(ev.confidence * 100);
+
+  const tr = document.createElement('tr');
+  tr.className = 'new-row' + (isAttack ? ' attack-row' : '');
+  tr.innerHTML = `
+    <td style="color:var(--text2)">${ev.timestamp}</td>
+    <td style="color:var(--text0);font-size:10px">${ev.src_ip}</td>
+    <td style="color:var(--text0);font-size:10px">${ev.dst_ip}</td>
+    <td style="color:var(--accent)">${ev.protocol}</td>
+    <td>${ev.service}</td>
+    <td>${fmtBytes(ev.src_bytes)}</td>
+    <td>${fmtBytes(ev.dst_bytes)}</td>
+    <td style="color:${ev.serror_rate>0.5?'var(--dos)':'var(--text2)'}">${(ev.serror_rate*100).toFixed(0)}%</td>
+    <td><span class="badge badge-${ev.label}">${ev.label}</span></td>
+    <td>
+      <div class="conf-bar">
+        <div class="conf-track"><div class="conf-fill" style="width:${conf}%;background:${ev.color}"></div></div>
+        <span style="color:var(--text2)">${conf}%</span>
+      </div>
+    </td>
+  `;
+
+  tbody.insertBefore(tr, tbody.firstChild);
+  const rows = tbody.querySelectorAll('tr');
+  if (rows.length > MAX_ROWS) rows[rows.length-1].remove();
+  $('flow-count').textContent = Math.min(totalFlows,MAX_ROWS) + ' flows';
+}
+
+function addAlert(ev) {
+  const list = $('alert-list');
+  alertCount++;
+  $('alert-count').textContent = alertCount + ' alerts';
+
+  const sev = ev.severity || 'medium';
+  const el = document.createElement('div');
+  el.className = `alert-item severity-${sev}`;
+  el.innerHTML = `
+    <div class="alert-top">
+      <span class="alert-label" style="color:${ev.color}"><span class="sev-dot"></span>${ev.label}</span>
+      <span class="alert-time">${ev.timestamp}</span>
+    </div>
+    <div class="alert-ip">${ev.src_ip} → ${ev.dst_ip}:${ev.dst_port}</div>
+    <div class="alert-detail">${ev.protocol} · ${ev.service} · conf ${Math.round(ev.confidence*100)}%</div>
+  `;
+  list.insertBefore(el, list.firstChild);
+  const items = list.querySelectorAll('.alert-item');
+  if (items.length > 40) items[items.length-1].remove();
+
+  // Flash status dot
+  const dot = $('status-dot');
+  dot.classList.add('alert');
+  setTimeout(()=>dot.classList.remove('alert'), 800);
+}
+
+function fmtBytes(b) {
+  if (b >= 1e6) return (b/1e6).toFixed(1)+'M';
+  if (b >= 1e3) return (b/1e3).toFixed(1)+'K';
+  return b+'B';
+}
+
+// ── Load model info ────────────────────────────────────────────────────────────
+fetch('/api/status').then(r=>r.json()).then(d => {
+  const name = d.model || '—';
+  $('model-name').textContent = name;
+  $('model-acc').textContent = d.accuracy ? (d.accuracy*100).toFixed(1)+'%' : '—';
+  $('model-feats').textContent = (d.features || '—') + ' features';
+  $('footer-model').textContent = name;
+  $('footer-feats').textContent = (d.features || '—');
+}).catch(()=>{});
+
+// ── SSE connection ─────────────────────────────────────────────────────────────
+let eventSource;
+let reconnectTimer;
+
+function connect() {
+  eventSource = new EventSource('/api/stream');
+
+  eventSource.onopen = () => {
+    $('status-text').textContent = 'MONITORING';
+    clearTimeout(reconnectTimer);
+  };
+
+  eventSource.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type !== 'flow') return;
+    const ev = msg.data;
+
+    totalFlows++;
+    counts[ev.label] = (counts[ev.label]||0) + 1;
+
+    // Timeline
+    tl[tlIdx].n += ev.label==='NORMAL'?1:0;
+    tl[tlIdx].a += ev.label!=='NORMAL'?1:0;
+    drawTimeline();
+
+    addFlowRow(ev);
+    updateStats();
+
+    if (ev.is_attack) addAlert(ev);
+  };
+
+  eventSource.onerror = () => {
+    $('status-text').textContent = 'RECONNECTING';
+    eventSource.close();
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+}
+
+connect();
+</script>
+</body>
+</html>
