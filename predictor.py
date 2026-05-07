@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
+MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
 
 LABEL_NAMES = {0: 'NORMAL', 1: 'DoS', 2: 'Probe', 3: 'R2L', 4: 'U2R'}
 SEVERITY    = {'NORMAL': 'none', 'DoS': 'critical', 'Probe': 'medium', 'R2L': 'high', 'U2R': 'critical'}
