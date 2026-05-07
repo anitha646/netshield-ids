@@ -158,5 +158,5 @@ ids\_project/
 
 \---
 
-Built by Adithiya · SRM Institute of Science and Technology · AI \& ML, Semester 5
+
 
